@@ -1,0 +1,61 @@
+Origen,Tipo Origen,Campo Destino,Tipo Destino,Obligatoriedad,Regla de Transformación,Notas
+usuario_id,string,account_id,UUID,Obligatorio,"Generar UUID basado en el hash SHA-256 del usuario_id concatenado con un salt","El salt se obtiene del servicio de configuración seguro"
+monto_pago,number,transaction_amount,decimal(15,2),Obligatorio,"Convertir de moneda local a USD utilizando el tipo de cambio del día","El tipo de cambio se obtiene del servicio de conversión de moneda"
+fecha_pago,datetime,transaction_date,timestamp,Obligatorio,"Convertir al formato ISO 8601",""
+concepto_pago,string,transaction_description,string(255),Opcional,"Truncar si excede 255 caracteres",""
+token_jwt,string,auth_token,string(512),Obligatorio,"Validar firma del token y extraer claims","Rechazar si el token no es válido"
+numero_cuenta_origen,string,source_account_number,string(20),Obligatorio,"Validar formato del número de cuenta según estándar IBAN","Rechazar si el formato es inválido"
+numero_cuenta_destino,string,destination_account_number,string(20),Obligatorio,"Validar formato del número de cuenta según estándar IBAN","Rechazar si el formato es inválido"
+tipo_pago,string,payment_type,enum(P2P, P2B, B2B),Obligatorio,"Mapear según la siguiente tabla:
+P2P -> P2P
+Pago Persona -> P2P
+Pago Empresa -> P2B
+Transferencia Empresa -> B2B",""
+estado_pago,string,transaction_status,enum(PENDING, COMPLETED, REJECTED),Obligatorio,"Mapear según el resultado de la validación:
+Token Inválido -> REJECTED
+Saldo Insuficiente -> REJECTED
+Éxito -> COMPLETED",""
+correo_usuario,string,user_email,string(100),Obligatorio,"Validar formato de correo electrónico","Rechazar si el formato es inválido"
+telefono_usuario,string,user_phone,string(20),Opcional,"Validar formato internacional (ej: +573001234567)",""
+
+## Descripción de Campos
+### Campos Origen
+- **usuario_id**: Identificador único del usuario que realiza el pago.
+- **monto_pago**: Monto del pago en la moneda local.
+- **fecha_pago**: Fecha y hora en la que se realiza el pago.
+- **concepto_pago**: Descripción del pago.
+- **token_jwt**: Token JWT proporcionado para autenticación.
+- **numero_cuenta_origen**: Número de cuenta del usuario que realiza el pago.
+- **numero_cuenta_destino**: Número de cuenta del destinatario del pago.
+- **tipo_pago**: Tipo de pago (P2P, Pago Persona, Pago Empresa, Transferencia Empresa).
+- **estado_pago**: Estado inicial del pago.
+- **correo_usuario**: Correo electrónico del usuario.
+- **telefono_usuario**: Número de teléfono del usuario.
+
+### Campos Destino
+- **account_id**: Identificador único de la cuenta generado a partir del usuario_id.
+- **transaction_amount**: Monto del pago en USD.
+- **transaction_date**: Fecha y hora de la transacción en formato ISO 8601.
+- **transaction_description**: Descripción de la transacción.
+- **auth_token**: Token de autenticación validado.
+- **source_account_number**: Número de cuenta origen validado.
+- **destination_account_number**: Número de cuenta destino validado.
+- **payment_type**: Tipo de pago estandarizado.
+- **transaction_status**: Estado final de la transacción.
+- **user_email**: Correo electrónico del usuario validado.
+- **user_phone**: Número de teléfono del usuario validado.
+
+## Reglas de Transformación Adicionales
+1. **Generación de UUID**: El campo `account_id` se genera utilizando un hash SHA-256 del `usuario_id` concatenado con un salt obtenido de un servicio de configuración seguro.
+2. **Conversión de Moneda**: El campo `transaction_amount` se calcula convirtiendo el `monto_pago` de la moneda local a USD utilizando el tipo de cambio obtenido de un servicio externo.
+3. **Validación de Formatos**: Los campos `numero_cuenta_origen`, `numero_cuenta_destino`, `correo_usuario` y `telefono_usuario` deben validarse según sus respectivos estándares.
+4. **Mapeo de Enums**: El campo `payment_type` debe mapearse según la tabla proporcionada, y el campo `transaction_status` debe actualizarse según el resultado del procesamiento.
+
+## Ejemplos
+| usuario_id  | monto_pago | fecha_pago           | concepto_pago       | token_jwt                                                                 | numero_cuenta_origen | numero_cuenta_destino | tipo_pago       | estado_pago | correo_usuario       | telefono_usuario  |
+|-------------|------------|-----------------------|---------------------|--------------------------------------------------------------------------|----------------------|-------------------------|-----------------|-------------|----------------------|-------------------|
+| usr12345    | 150.75     | 2023-10-01T12:00:00Z | Pago de servicios  | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... | CO991234567890123456 | ES992345678901234567    | Pago Empresa    | PENDING     | usuario@example.com  | +573001234567     |
+
+| account_id                            | transaction_amount | transaction_date       | transaction_description | auth_token                                                               | source_account_number | destination_account_number | payment_type | transaction_status | user_email            | user_phone        |
+|--------------------------------------|--------------------|-------------------------|-------------------------|--------------------------------------------------------------------------|-----------------------|----------------------------|-------------|--------------------|------------------------|-------------------|
+| 550e8400-e29b-41d4-a716-446655440000 | 150.75             | 2023-10-01T12:00:00Z    | Pago de servicios       | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...                                | CO991234567890123456  | ES992345678901234567     | P2B           | COMPLETED          | usuario@example.com     | +573001234567     |

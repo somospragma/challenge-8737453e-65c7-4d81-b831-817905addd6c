@@ -1,0 +1,541 @@
+openapi: 3.1.0
+info:
+  title: Sistema SOA de Gestión Financiera
+  description: |-
+    API para la gestión de servicios financieros en una arquitectura SOA.
+    Incluye endpoints para transacciones, consultas de cuentas y auditorías.
+    Los esquemas y ejemplos siguen estándares BIAN y FAPI para garantizar
+    interoperabilidad y seguridad.
+  version: 1.0.0
+  contact:
+    name: Equipo de Seguridad SOA
+    email: seguridad@financiera.com
+  license:
+    name: Propietario
+servers:
+  - url: https://api.financiera.com/v1
+    description: Servidor de producción
+  - url: https://sandbox.api.financiera.com/v1
+    description: Entorno de pruebas
+paths:
+  /transactions:
+    post:
+      summary: Registrar una transacción financiera
+      description: |-
+        Registra una transacción entre cuentas, aplicando validaciones de
+        seguridad y ACLs. Requiere autenticación OAuth2 con scope `transactions:write`.
+      operationId: registerTransaction
+      tags:
+        - Transactions
+      security:
+        - OAuth2: [transactions:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+            examples:
+              transferenciaExitosa:
+                value:
+                  sourceAccount: "ES9121000418450200051332"
+                  destinationAccount: "ES7100302053091234567895"
+                  amount: 150.75
+                  currency: "EUR"
+                  concept: "Pago de factura"
+              errorMontoNegativo:
+                value:
+                  sourceAccount: "ES9121000418450200051332"
+                  destinationAccount: "ES7100302053091234567895"
+                  amount: -100.00
+                  currency: "EUR"
+                  concept: "Devolución"
+      responses:
+        "201":
+          description: Transacción registrada con éxito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              examples:
+                exito:
+                  value:
+                    transactionId: "txn-550e8400-e29b-41d4-a716-446655440000"
+                    status: "COMPLETED"
+                    timestamp: "2023-10-03T14:22:10Z"
+        "400":
+          description: Solicitud inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                montoNegativo:
+                  value:
+                    code: "INVALID_AMOUNT"
+                    message: "El monto de la transacción no puede ser negativo"
+                    details:
+                      - field: "amount"
+                        issue: "El valor debe ser mayor que 0"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                tokenInvalido:
+                  value:
+                    code: "UNAUTHORIZED"
+                    message: "Token de autenticación inválido o expirado"
+        "403":
+          description: Prohibido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                sinPermiso:
+                  value:
+                    code: "FORBIDDEN"
+                    message: "El usuario no tiene permiso para realizar transacciones"
+                    details:
+                      - requiredScope: "transactions:write"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                errorServidor:
+                  value:
+                    code: "INTERNAL_ERROR"
+                    message: "Error al procesar la transacción"
+                    details:
+                      - errorId: "err-550e8400-e29b-41d4-a716-446655440001"
+  /accounts/{accountId}:
+    get:
+      summary: Consultar detalles de una cuenta
+      description: |-
+        Obtiene los detalles de una cuenta específica, incluyendo saldo y
+        movimientos recientes. Requiere autenticación OAuth2 con scope
+        `accounts:read`. Las ACLs restringen el acceso a cuentas propias.
+      operationId: getAccountDetails
+      tags:
+        - Accounts
+      security:
+        - OAuth2: [accounts:read]
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Identificador único de la cuenta
+          example: "acc-550e8400-e29b-41d4-a716-446655440002"
+      responses:
+        "200":
+          description: Detalles de la cuenta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDetails'
+              examples:
+                exito:
+                  value:
+                    accountId: "acc-550e8400-e29b-41d4-a716-446655440002"
+                    accountNumber: "ES9121000418450200051332"
+                    balance: 1250.30
+                    currency: "EUR"
+                    lastTransactions:
+                      - transactionId: "txn-550e8400-e29b-41d4-a716-446655440003"
+                        amount: 150.75
+                        type: "DEBIT"
+                        timestamp: "2023-10-02T09:15:00Z"
+                      - transactionId: "txn-550e8400-e29b-41d4-a716-446655440004"
+                        amount: 300.00
+                        type: "CREDIT"
+                        timestamp: "2023-10-01T16:45:00Z"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                tokenInvalido:
+                  value:
+                    code: "UNAUTHORIZED"
+                    message: "Token de autenticación inválido o expirado"
+        "403":
+          description: Prohibido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                cuentaAjena:
+                  value:
+                    code: "FORBIDDEN"
+                    message: "Acceso denegado a la cuenta solicitada"
+                    details:
+                      - policy: "Solo se permite acceder a cuentas propias"
+        "404":
+          description: Cuenta no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noExiste:
+                  value:
+                    code: "ACCOUNT_NOT_FOUND"
+                    message: "La cuenta solicitada no existe"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /audit/logs:
+    get:
+      summary: Consultar logs de auditoría
+      description: |-
+        Obtiene los registros de auditoría del sistema para un rango de fechas
+        específico. Requiere autenticación OAuth2 con scope `audit:read`.
+        Las ACLs restringen el acceso a logs según el rol del usuario.
+      operationId: getAuditLogs
+      tags:
+        - Audit
+      security:
+        - OAuth2: [audit:read]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Fecha y hora de inicio del rango de auditoría
+          example: "2023-10-01T00:00:00Z"
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Fecha y hora de fin del rango de auditoría
+          example: "2023-10-03T23:59:59Z"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+          description: Número máximo de registros a retornar
+      responses:
+        "200":
+          description: Lista de registros de auditoría
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+              examples:
+                exito:
+                  value:
+                    - logId: "log-550e8400-e29b-41d4-a716-446655440005"
+                      timestamp: "2023-10-03T14:22:10Z"
+                      userId: "user-550e8400-e29b-41d4-a716-446655440010"
+                      action: "CREATE_TRANSACTION"
+                      resourceType: "TRANSACTION"
+                      resourceId: "txn-550e8400-e29b-41d4-a716-446655440000"
+                      status: "SUCCESS"
+                      metadata:
+                        ipAddress: "192.168.1.100"
+                        userAgent: "Mozilla/5.0"
+                    - logId: "log-550e8400-e29b-41d4-a716-446655440006"
+                      timestamp: "2023-10-03T14:20:00Z"
+                      userId: "user-550e8400-e29b-41d4-a716-446655440011"
+                      action: "VIEW_ACCOUNT"
+                      resourceType: "ACCOUNT"
+                      resourceId: "acc-550e8400-e29b-41d4-a716-446655440002"
+                      status: "SUCCESS"
+                      metadata:
+                        ipAddress: "192.168.1.101"
+                        userAgent: "Mozilla/5.0"
+        "400":
+          description: Solicitud inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                rangoInvalido:
+                  value:
+                    code: "INVALID_DATE_RANGE"
+                    message: "El rango de fechas es inválido"
+                    details:
+                      - field: "endDate"
+                        issue: "Debe ser posterior a startDate"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "403":
+          description: Prohibido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                rolInsuficiente:
+                  value:
+                    code: "FORBIDDEN"
+                    message: "El usuario no tiene permiso para acceder a los logs"
+                    details:
+                      - requiredRole: "AUDITOR"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    TransactionRequest:
+      type: object
+      required:
+        - sourceAccount
+        - destinationAccount
+        - amount
+        - currency
+        - concept
+      properties:
+        sourceAccount:
+          type: string
+          description: Número de cuenta origen (formato IBAN)
+          example: "ES9121000418450200051332"
+        destinationAccount:
+          type: string
+          description: Número de cuenta destino (formato IBAN)
+          example: "ES7100302053091234567895"
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Monto de la transacción
+          example: 150.75
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          description: Código de moneda ISO 4217
+          example: "EUR"
+        concept:
+          type: string
+          maxLength: 140
+          description: Concepto de la transacción
+          example: "Pago de factura"    TransactionResponse:
+      type: object
+      required:
+        - transactionId
+        - status
+        - timestamp
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+          description: Identificador único de la transacción
+          example: "txn-550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, REJECTED, FAILED]
+          description: Estado de la transacción
+          example: "COMPLETED"
+        timestamp:
+          type: string
+          format: date-time
+          description: Fecha y hora de registro de la transacción
+          example: "2023-10-03T14:22:10Z"
+        rejectionReason:
+          type: string
+          description: Motivo de rechazo (solo para estado REJECTED)
+          example: "Saldo insuficiente"
+    AccountDetails:
+      type: object
+      required:
+        - accountId
+        - accountNumber
+        - balance
+        - currency
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Identificador único de la cuenta
+          example: "acc-550e8400-e29b-41d4-a716-446655440002"
+        accountNumber:
+          type: string
+          description: Número de cuenta (formato IBAN)
+          example: "ES9121000418450200051332"
+        balance:
+          type: number
+          format: double
+          description: Saldo actual de la cuenta
+          example: 1250.30
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          description: Código de moneda ISO 4217
+          example: "EUR"
+        lastTransactions:
+          type: array
+          items:
+            type: object
+            required:
+              - transactionId
+              - amount
+              - type
+              - timestamp
+            properties:
+              transactionId:
+                type: string
+                format: uuid
+                description: Identificador de la transacción
+                example: "txn-550e8400-e29b-41d4-a716-446655440003"
+              amount:
+                type: number
+                format: double
+                description: Monto de la transacción
+                example: 150.75
+              type:
+                type: string
+                enum: [DEBIT, CREDIT]
+                description: Tipo de movimiento
+                example: "DEBIT"
+              timestamp:
+                type: string
+                format: date-time
+                description: Fecha y hora de la transacción
+                example: "2023-10-02T09:15:00Z"
+    AuditLog:
+      type: object
+      required:
+        - logId
+        - timestamp
+        - userId
+        - action
+        - resourceType
+        - resourceId
+        - status
+      properties:
+        logId:
+          type: string
+          format: uuid
+          description: Identificador único del registro de auditoría
+          example: "log-550e8400-e29b-41d4-a716-446655440005"
+        timestamp:
+          type: string
+          format: date-time
+          description: Fecha y hora del evento
+          example: "2023-10-03T14:22:10Z"
+        userId:
+          type: string
+          format: uuid
+          description: Identificador del usuario que realizó la acción
+          example: "user-550e8400-e29b-41d4-a716-446655440010"
+        action:
+          type: string
+          description: Acción realizada
+          enum: [CREATE_TRANSACTION, VIEW_ACCOUNT, UPDATE_ACCOUNT, DELETE_ACCOUNT, LOGIN, LOGOUT]
+          example: "CREATE_TRANSACTION"
+        resourceType:
+          type: string
+          description: Tipo de recurso afectado
+          enum: [TRANSACTION, ACCOUNT, USER]
+          example: "TRANSACTION"
+        resourceId:
+          type: string
+          description: Identificador del recurso afectado
+          example: "txn-550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          enum: [SUCCESS, FAILURE, PENDING]
+          description: Estado de la acción
+          example: "SUCCESS"
+        metadata:
+          type: object
+          description: Metadatos adicionales del evento
+          additionalProperties: true
+          example:
+            ipAddress: "192.168.1.100"
+            userAgent: "Mozilla/5.0"
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Código de error
+          example: "INVALID_AMOUNT"
+        message:
+          type: string
+          description: Mensaje descriptivo del error
+          example: "El monto de la transacción no puede ser negativo"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                description: Campo asociado al error
+                example: "amount"
+              issue:
+                type: string
+                description: Descripción del problema
+                example: "El valor debe ser mayor que 0"
+              requiredScope:
+                type: string
+                description: Scope requerido para el acceso
+                example: "transactions:write"
+              requiredRole:
+                type: string
+                description: Rol requerido para el acceso
+                example: "AUDITOR"
+              policy:
+                type: string
+                description: Política de acceso asociada
+                example: "Solo se permite acceder a cuentas propias"
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: Autenticación OAuth2 con scopes específicos
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.financiera.com/oauth/authorize
+          tokenUrl: https://auth.financiera.com/oauth/token
+          scopes:
+            accounts:read: Acceso de lectura a cuentas
+            accounts:write: Acceso de escritura a cuentas
+            transactions:read: Acceso de lectura a transacciones
+            transactions:write: Acceso de escritura a transacciones
+            audit:read: Acceso de lectura a logs de auditoría
+            audit:write: Acceso de escritura a logs de auditoría
+    APIKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |-
+        Clave de API para acceso interno entre servicios. Solo debe usarse
+        en comunicaciones service-to-service con TLS mutuo.
+        **Nota de seguridad:** Esta clave nunca debe exponerse a clientes.

@@ -1,0 +1,9 @@
+Origen,Destino,Campo,Tipo,Dato Sensible,Obligatoriedad,Regla de Transformación,Controles Requeridos
+Servicio:Accounts,Servicio:Transfers,accountNumber,string,Sí,Obligatorio,Cifrado con AES-256 y masking en logs,Cifrado + ACL
+Servicio:Customers,Servicio:Transfers,customerId,string,Sí,Obligatorio,Hashing con SHA-256 para logs,Hashing + ACL
+Servicio:Transfers,Servicio:Notifications,amount,number,No,Obligatorio,Validación de rango (0 < amount < 1M),Rate limiting
+Servicio:Accounts,Servicio:Reports,balance,number,Sí,Opcional,Cifrado con homomorphic encryption,Cifrado + Audit log
+Servicio:Customers,Servicio:Analytics,email,string,Sí,Obligatorio,Tokenización,Cifrado + ACL
+Servicio:Transfers,Servicio:Audit,transactionId,string,No,Obligatorio,Generación de UUID v4,Ninguno
+Servicio:Notifications,Servicio:Customers,phoneNumber,string,Sí,Opcional,Masking (ej. +XX-XXX-XXX-1234),ACL + Consentimiento
+Servicio:Analytics,Servicio:Dashboard,behaviorData,object,No,Opcional,Agregación y anonimización,GDPR compliance
